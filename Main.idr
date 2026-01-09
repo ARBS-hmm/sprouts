@@ -21,7 +21,7 @@ mutual
              (shape : Shape) -> 
              (conn : Connection) -> 
              (rot : Rot shape) -> 
-             (spaces : (toFloat conn)) -> --Lazy hmm
+             (spaces : (toFloat conn)) ->
              Node
 
   data Space : Type where
@@ -141,30 +141,20 @@ getOrderedIndices nodes a b =
         then Nothing
         else Just (if i < j then (i, j) else (j, i))
     _ => Nothing
-
-isValidSpace : Space -> Bool
-isValidSpace S0 = False
-isValidSpace (Sn []) = False
-isValidSpace (Sn [_]) = False
-isValidSpace (Sn _) = True
-
 export
-slice : Graph -> Space -> (a,b: Node) -> Maybe (Vect 2 Space)
-slice g space a b = 
-  if not (isValidSpace space) 
-    then Nothing
-    else case space of
-      Sn nodes => 
-        case (getOrderedIndices nodes (nodeId a) (nodeId b)) of
-          Just (startIdx, endIdx) => 
-            let firstPath = getSubsequence nodes startIdx endIdx
-                secondPath = getComplement nodes startIdx endIdx
-                newId = size(g.nodeMap) +1
-                firstSpace = makeCyclicSpace firstPath newId
-                secondSpace = makeCyclicSpace secondPath newId
-            in Just [firstSpace, secondSpace]
-          Nothing => Nothing
-      _ => Nothing
+
+slice : Graph -> Space -> (a, b : Node) -> Maybe (Vect 2 Space)
+slice g S0 a b = Nothing
+slice g (Sn nodes) a b =
+  case getOrderedIndices nodes (nodeId a) (nodeId b) of
+    Just (startIdx, endIdx) => 
+      let firstPath = getSubsequence nodes startIdx endIdx
+          secondPath = getComplement nodes startIdx endIdx
+          newId = size (nodeMap g) + 1
+          firstSpace = makeCyclicSpace firstPath newId
+          secondSpace = makeCyclicSpace secondPath newId
+      in Just [firstSpace, secondSpace]
+    Nothing => Nothing
 
 createNewNode : Graph -> (a, b : Node) -> (asp : Space) -> Maybe Node
 createNewNode g a b asp = 
@@ -177,9 +167,7 @@ createNewNode g a b asp =
              nid = size(g.nodeMap)+1
              newNode = MkNode nid Edge connectionType [aid,bid] spacesVect
          in Just newNode
-       
-       Borders => 
-         case slice g asp a b of
+       Borders => case slice g asp a b of
            Nothing => Nothing
            Just (spaceVect) => 
              let aid = nodeId a
