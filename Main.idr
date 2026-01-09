@@ -76,21 +76,6 @@ inSpace g n sp =
       spaceList = spacesToList {c=conn} spaces
   in any (== sp) spaceList
 
---Pending
--- supply nearest bounded node to the node
-searchEnd : Graph -> (a:Node) -> (sp : Space) -> Maybe Node
-searchEnd g a S0 = ?searche_0
-searchEnd g a (Sn xs) = ?searche_1
-
-
-checkForm : Graph -> (a,b,new:Node) -> (asp:Space) -> Maybe (Space,Space)
-checkForm g a b new asp = do
-  aend <- searchEnd g a asp
-  bend <- searchEnd g b asp
-  let condn = ((inSpace g aend asp) && (inSpace g bend asp))
-  if condn then Nothing -- Pending
-           else Nothing
-
 findPosition : Eq a => a -> List a -> Maybe Nat
 findPosition x [] = Nothing
 findPosition x (y :: ys) = 
@@ -156,6 +141,20 @@ slice g (Sn nodes) a b =
       in Just [firstSpace, secondSpace]
     Nothing => Nothing
 
+--Pending
+-- supply nearest bounded node to the node
+searchEnd : Graph -> (sp : Space) -> Node -> Maybe Node
+searchEnd g S0 a = ?searche_0
+searchEnd g (Sn xs) a = ?searche_1
+
+checkForm : Graph -> (asp: Space) -> (a,b:Node) -> Maybe (Vect 2 Space)
+checkForm g asp a b = do
+  aend <- searchEnd g asp a
+  bend <- searchEnd g asp b
+  let condn = ((inSpace g aend asp) && (inSpace g bend asp))
+  if condn then (slice g asp a b)
+           else Nothing
+
 createNewNode : Graph -> (a, b : Node) -> (asp : Space) -> Maybe Node
 createNewNode g a b asp = 
   let connectionType = conn a b
@@ -167,12 +166,12 @@ createNewNode g a b asp =
              nid = size(g.nodeMap)+1
              newNode = MkNode nid Edge connectionType [aid,bid] spacesVect
          in Just newNode
-       Borders => case slice g asp a b of
+       Borders => case checkForm g asp a b of
            Nothing => Nothing
            Just (spaceVect) => 
              let aid = nodeId a
                  bid = nodeId b
                  nid = size(g.nodeMap)+1
                  newNode = MkNode nid Edge Borders [aid,bid] spaceVect
-             in Just newNode
-       Fixed => Nothing
+             in pure newNode
+       Fixed => Nothing -- impossible case
