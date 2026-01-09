@@ -5,33 +5,36 @@ import Data.SortedMap
 
 data Shape = Free | Leaf | Edge | Sat
 data Connection = Float | Borders | Fixed
-data NodeId = MNode Nat
-data SpaceId = MSpace Nat
 
+NodeId = Nat
+SpaceId = Nat
+
+Rot : Shape -> Type
+Rot Free = () 
+Rot Leaf = Vect 1 NodeId
+Rot Edge = Vect 2 NodeId
+Rot Sat = Vect 3 NodeId
 
 mutual
   data Node : Type where
-    MkNode : (id : Nat) -> 
+    MkNode : (id : NodeId) -> 
              (shape : Shape) -> 
              (conn : Connection) -> 
              (rot : Rot shape) -> 
-             (spaces : toFloat conn) -> 
+             (spaces : (toFloat conn)) -> --Lazy hmm
              Node
 
   data Space : Type where
     S0 : Space
-    Sn : List Node -> Space
+    Sn : List NodeId -> Space
 
   toFloat : Connection -> Type
   toFloat Float = Vect 1 Space
   toFloat Borders = Vect 2 Space
   toFloat Fixed = Vect 3 Space
 
-  Rot : Shape -> Type
-  Rot Free = () 
-  Rot Leaf = Vect 1 Node
-  Rot Edge = Vect 2 Node
-  Rot Sat = Vect 3 Node
+nodeId : Node -> NodeId
+nodeId (MkNode id shape conn rot spaces) = id
 
 Eq Node where
   (==) (MkNode id _ _ _ _) (MkNode id2 _ _ _ _)= (id == id2) 
@@ -97,27 +100,91 @@ findPosition x (y :: ys) =
            Just n => Just (S n)
            Nothing => Nothing
 
-takeList : Nat -> List a -> List a
-takeList Z xs = []
-takeList (S k) [] = []
-takeList (S k) (x :: xs) = x :: takeList k xs
+safeDrop : Nat -> List a -> List a
+safeDrop Z xs = xs
+safeDrop (S k) [] = []
+safeDrop (S k) (x :: xs) = safeDrop k xs
 
-dropList : Nat -> List a -> List a  
-dropList Z xs = xs
-dropList (S k) [] = []
-dropList (S k) (x :: xs) = dropList k xs
+safeTake : Nat -> List a -> List a
+safeTake Z xs = []
+safeTake (S k) [] = []
+safeTake (S k) (x :: xs) = x :: safeTake k xs
 
-createNewNode : (a, b : Node) -> (asp : Space) -> Maybe Node
-createNewNode a b asp = 
+diff : Nat -> Nat -> Nat
+diff start end = 
+  let helper : Nat -> Nat -> Nat
+      helper Z end = end
+      helper (S k) (S j) = helper k j
+      helper (S k) Z = Z  -- Shouldn't happen if start <= end
+  in helper start end
+
+getSubsequence : List NodeId -> Nat -> Nat -> List NodeId
+getSubsequence nodes start end = 
+  let dropped = safeDrop start nodes
+      length = S (diff start end)  -- +1 to include both endpoints
+  in safeTake length dropped
+
+getComplement : List NodeId -> Nat -> Nat -> List NodeId
+getComplement nodes start end =
+  let afterEnd = safeDrop (S end) nodes  -- Drop end+1 elements
+      upToStart = safeTake (S start) nodes  -- Take start+1 elements
+  in afterEnd ++ upToStart
+
+makeCyclicSpace : List NodeId -> NodeId -> Space
+makeCyclicSpace nodes new = Sn (nodes ++ [new])
+
+getOrderedIndices : List NodeId -> (a,b : NodeId) -> Maybe (Nat, Nat)
+getOrderedIndices nodes a b = 
+  case (findPosition a nodes, findPosition b nodes) of
+    (Just i, Just j) => 
+      if i == j 
+        then Nothing
+        else Just (if i < j then (i, j) else (j, i))
+    _ => Nothing
+
+isValidSpace : Space -> Bool
+isValidSpace S0 = False
+isValidSpace (Sn []) = False
+isValidSpace (Sn [_]) = False
+isValidSpace (Sn _) = True
+
+export
+slice : Graph -> Space -> (a,b: Node) -> Maybe (Vect 2 Space)
+slice g space a b = 
+  if not (isValidSpace space) 
+    then Nothing
+    else case space of
+      Sn nodes => 
+        case (getOrderedIndices nodes (nodeId a) (nodeId b)) of
+          Just (startIdx, endIdx) => 
+            let firstPath = getSubsequence nodes startIdx endIdx
+                secondPath = getComplement nodes startIdx endIdx
+                newId = size(g.nodeMap) +1
+                firstSpace = makeCyclicSpace firstPath newId
+                secondSpace = makeCyclicSpace secondPath newId
+            in Just [firstSpace, secondSpace]
+          Nothing => Nothing
+      _ => Nothing
+
+createNewNode : Graph -> (a, b : Node) -> (asp : Space) -> Maybe Node
+createNewNode g a b asp = 
   let connectionType = conn a b
   in case connectionType of
        Float => 
          let spacesVect : toFloat Float = [asp]
-             newNode = MkNode 0 Edge connectionType [a,b] spacesVect
+             aid = nodeId a
+             bid = nodeId b
+             nid = size(g.nodeMap)+1
+             newNode = MkNode nid Edge connectionType [aid,bid] spacesVect
          in Just newNode
+       
        Borders => 
-         let spacesVect : toFloat Borders = ?h  -- Need 2 spaces
-             newNode = MkNode 0 Edge connectionType [a,b] spacesVect
-         in Just newNode
+         case slice g asp a b of
+           Nothing => Nothing
+           Just (spaceVect) => 
+             let aid = nodeId a
+                 bid = nodeId b
+                 nid = size(g.nodeMap)+1
+                 newNode = MkNode nid Edge Borders [aid,bid] spaceVect
+             in Just newNode
        Fixed => Nothing
-
