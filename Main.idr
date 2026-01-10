@@ -1,5 +1,6 @@
 module Main
 
+import Data.Fin
 import Data.Vect
 import Data.SortedMap
 
@@ -54,9 +55,10 @@ conn (MkNode id shape x rot spaces) (MkNode k y z w v) = checkconn x z where
   checkconn : Connection -> Connection -> Connection
   checkconn Float Float = Float
   checkconn Float Borders = Float
-  checkconn Float Fixed = Fixed
-  checkconn Borders Float = Float
-  checkconn Borders Borders = Borders
+  checkconn Float Fixed = Fixed -- impossible /invalid
+  checkconn Borders Float = Float -- symmetric
+  checkconn Borders Borders = Borders -- or float incase asp is S0 #note
+  -- #Pending refactor this logic...not sure how
   checkconn Borders Fixed = Fixed
   checkconn Fixed _ = Fixed
 
@@ -95,6 +97,8 @@ safeTake Z xs = []
 safeTake (S k) [] = []
 safeTake (S k) (x :: xs) = x :: safeTake k xs
 
+-- deepseek sucks #note
+-- end - start ()
 diff : Nat -> Nat -> Nat
 diff start end = 
   let helper : Nat -> Nat -> Nat
@@ -111,28 +115,51 @@ getSubsequence nodes start end =
 
 getComplement : List NodeId -> Nat -> Nat -> List NodeId
 getComplement nodes start end =
-  let afterEnd = safeDrop (S end) nodes  -- Drop end+1 elements
-      upToStart = safeTake (S start) nodes  -- Take start+1 elements
-  in afterEnd ++ upToStart
+  let part1 = safeDrop (diff 1 end) nodes
+      part2 = safeTake (start) nodes
+  in part1 ++ part2
+
+test : List NodeId
+test = getComplement [1,2,3,4,5,6,7] 2 5
 
 makeCyclicSpace : List NodeId -> NodeId -> Space
 makeCyclicSpace nodes new = Sn (nodes ++ [new])
 
-getOrderedIndices : List NodeId -> (a,b : NodeId) -> Maybe (Nat, Nat)
+-- #note : deals only with cases where self path isnt considered
+getOrderedIndices: List NodeId -> (a,b : NodeId) -> Maybe ((Nat, Nat), Bool)
 getOrderedIndices nodes a b = 
   case (findPosition a nodes, findPosition b nodes) of
     (Just i, Just j) => 
       if i == j 
         then Nothing
-        else Just (if i < j then (i, j) else (j, i))
+        else 
+          let (start, end) = if i < j then (i, j) else (j, i)
+              aIsStart = i < j  -- True if a is at start position
+          in Just ((start, end), aIsStart)
     _ => Nothing
-export
 
-slice : Graph -> Space -> (a, b : Node) -> Maybe (Vect 2 Space)
-slice g S0 a b = Nothing
-slice g (Sn nodes) a b =
+--Pending
+-- supply nearest bounded node to the node
+export
+searchEnd : Graph -> (sp : Space) -> Node -> Maybe (Node,List Node)
+searchEnd g S0 a = ?searche_0
+searchEnd g (Sn xs) a = ?searche_1
+
+export
+slice : Graph -> Space -> (a, b : Node) -> (aseq,bseq : List Node)-> Maybe (Vect 2 Space)
+slice g S0 a b _ _= Nothing
+slice g (Sn nodes) a b aseq bseq =
   case getOrderedIndices nodes (nodeId a) (nodeId b) of
-    Just (startIdx, endIdx) => 
+    Just ((startIdx, endIdx),True)=> 
+      let firstPath = getSubsequence nodes startIdx endIdx
+          secondPath = getComplement nodes startIdx endIdx
+          newId = size (nodeMap g) + 1
+           --new = bseq ++ [newId] ++ (reverse aseq) 
+           -- Maybe??
+          firstSpace = makeCyclicSpace firstPath newId
+          secondSpace = makeCyclicSpace secondPath newId
+      in Just [firstSpace, secondSpace]
+    Just ((startIdx,endIdx),False) =>
       let firstPath = getSubsequence nodes startIdx endIdx
           secondPath = getComplement nodes startIdx endIdx
           newId = size (nodeMap g) + 1
@@ -141,18 +168,12 @@ slice g (Sn nodes) a b =
       in Just [firstSpace, secondSpace]
     Nothing => Nothing
 
---Pending
--- supply nearest bounded node to the node
-searchEnd : Graph -> (sp : Space) -> Node -> Maybe Node
-searchEnd g S0 a = ?searche_0
-searchEnd g (Sn xs) a = ?searche_1
-
 checkForm : Graph -> (asp: Space) -> (a,b:Node) -> Maybe (Vect 2 Space)
 checkForm g asp a b = do
-  aend <- searchEnd g asp a
-  bend <- searchEnd g asp b
+  (aend,aseq) <- searchEnd g asp a
+  (bend,bseq) <- searchEnd g asp b
   let condn = ((inSpace g aend asp) && (inSpace g bend asp))
-  if condn then (slice g asp a b)
+  if condn then (slice g asp aend bend aseq bseq)
            else Nothing
 
 createNewNode : Graph -> (a, b : Node) -> (asp : Space) -> Maybe Node
@@ -175,3 +196,4 @@ createNewNode g a b asp =
                  newNode = MkNode nid Edge Borders [aid,bid] spaceVect
              in pure newNode
        Fixed => Nothing -- impossible case
+
