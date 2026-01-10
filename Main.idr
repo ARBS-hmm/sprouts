@@ -115,12 +115,12 @@ getSubsequence nodes start end =
 
 getComplement : List NodeId -> Nat -> Nat -> List NodeId
 getComplement nodes start end =
-  let part1 = safeDrop (diff 1 end) nodes
+  let part1 = safeDrop (diff 1 end) nodes -- off by one error**
       part2 = safeTake (start) nodes
   in part1 ++ part2
 
-test : List NodeId
-test = getComplement [1,2,3,4,5,6,7] 2 5
+--test : List NodeId
+--test = getComplement [1,2,3,4,5,6,7] 2 5
 
 makeCyclicSpace : List NodeId -> (List NodeId) -> Space
 makeCyclicSpace nodes new = Sn (nodes ++ new)
