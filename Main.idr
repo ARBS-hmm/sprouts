@@ -122,8 +122,8 @@ getComplement nodes start end =
 test : List NodeId
 test = getComplement [1,2,3,4,5,6,7] 2 5
 
-makeCyclicSpace : List NodeId -> NodeId -> Space
-makeCyclicSpace nodes new = Sn (nodes ++ [new])
+makeCyclicSpace : List NodeId -> (List NodeId) -> Space
+makeCyclicSpace nodes new = Sn (nodes ++ new)
 
 -- #note : deals only with cases where self path isnt considered
 getOrderedIndices: List NodeId -> (a,b : NodeId) -> Maybe ((Nat, Nat), Bool)
@@ -141,12 +141,12 @@ getOrderedIndices nodes a b =
 --Pending
 -- supply nearest bounded node to the node
 export
-searchEnd : Graph -> (sp : Space) -> Node -> Maybe (Node,List Node)
+searchEnd : Graph -> (sp : Space) -> Node -> Maybe (Node,List NodeId)
 searchEnd g S0 a = ?searche_0
 searchEnd g (Sn xs) a = ?searche_1
 
 export
-slice : Graph -> Space -> (a, b : Node) -> (aseq,bseq : List Node)-> Maybe (Vect 2 Space)
+slice : Graph -> Space -> (a, b : Node) -> (aseq,bseq : List NodeId)-> Maybe (Vect 2 Space)
 slice g S0 a b _ _= Nothing
 slice g (Sn nodes) a b aseq bseq =
   case getOrderedIndices nodes (nodeId a) (nodeId b) of
@@ -154,17 +154,19 @@ slice g (Sn nodes) a b aseq bseq =
       let firstPath = getSubsequence nodes startIdx endIdx
           secondPath = getComplement nodes startIdx endIdx
           newId = size (nodeMap g) + 1
-           --new = bseq ++ [newId] ++ (reverse aseq) 
-           -- Maybe??
-          firstSpace = makeCyclicSpace firstPath newId
-          secondSpace = makeCyclicSpace secondPath newId
+          new = the (List NodeId) (reverse(aseq) ++ [newId] ++ bseq)
+          wen = the (List NodeId) (reverse (bseq) ++ [newId] ++ aseq)
+          firstSpace = makeCyclicSpace firstPath wen
+          secondSpace = makeCyclicSpace secondPath new
       in Just [firstSpace, secondSpace]
     Just ((startIdx,endIdx),False) =>
       let firstPath = getSubsequence nodes startIdx endIdx
           secondPath = getComplement nodes startIdx endIdx
           newId = size (nodeMap g) + 1
-          firstSpace = makeCyclicSpace firstPath newId
-          secondSpace = makeCyclicSpace secondPath newId
+          new = the (List NodeId) (reverse(aseq) ++ [newId] ++ bseq)
+          wen = the (List NodeId) (reverse (bseq) ++ [newId] ++ aseq)
+          firstSpace = makeCyclicSpace firstPath new
+          secondSpace = makeCyclicSpace secondPath wen
       in Just [firstSpace, secondSpace]
     Nothing => Nothing
 
