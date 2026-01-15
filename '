@@ -183,30 +183,18 @@ getNodesInSpace S0 = []
 getNodesInSpace (Sn ids) = ids
 
 public export
-rotToList : (shape : Shape) -> Rot shape -> List NodeId
-rotToList Free _ = []
-rotToList Leaf xs = toList xs
-rotToList Edge xs = toList xs
-rotToList Sat xs = toList xs
-
-public export
-getNeighbors : (n:Node) -> List NodeId
-getNeighbors n = rotToList (shape n) (rotation n)
-
-public export
 dfs : Graph -> Node -> List NodeId -> List Node
 dfs g n visited = 
-  let currentId = nodeId n
-  in if currentId `elem` visited
-     then []
-     else 
-       let newVisited = currentId :: visited
-       -- Current node + DFS on all neighbors
-       in n :: concatMap (\neighborId => 
-            case lookup neighborId (nodeMap g) of
-              Nothing => []
-              Just neighbor => dfs g neighbor newVisited
-          ) (getNeighbors n)
+  let currentId = nodeId n in 
+      if (currentId elem visited) then []
+                                  else let 
+                                    newVisit = currentId :: visited
+                                    case rotation n of 
+                                                           () => []
+
+                                  
+                                  
+
 
 public export
 searchEnd : Graph -> (sp : Space) -> Node -> Maybe (Node, List NodeId)
