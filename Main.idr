@@ -3,6 +3,7 @@ module Main
 import Data.Fin
 import Data.Vect
 import Data.SortedMap
+import Data.List
 
 data Shape = Free | Leaf | Edge | Sat
 data Connection = Float | Borders | Fixed
@@ -191,16 +192,17 @@ dfs g a visited with (connection a)
           case searchFromNode neighborId visited of
             Just path => Just (currentId :: path)  -- Success
             Nothing => findPath rest visited currentId
-    
-  
+
   dfs g a visited | Borders = Nothing
   dfs g a visited | Fixed = Nothing
 
--- Helper to get last element of a list
-getLast : List a -> Maybe a
-getLast [] = Nothing
-getLast [x] = Just x
-getLast (x :: xs) = getLast xs
+splitLast : List a -> Maybe (List a, a)
+splitLast [] = Nothing
+splitLast [x] = Just ([], x)  -- Only one element
+splitLast (x :: xs) =
+  case splitLast xs of
+    Nothing => Nothing
+    Just (middle, last) => Just (x :: middle, last)
 
 export
 searchEnd : Graph -> (sp : Space) -> Node -> Maybe (Node, List NodeId)
@@ -210,15 +212,16 @@ searchEnd g sp a with (connection a)
       Nothing => Nothing
       Just path =>
         case path of
-          -- Need at least 2 elements: start node + at least one other
+          [] => Nothing
           (start :: rest) => 
-            case getLast rest of
-              Nothing => Nothing  -- rest is empty (shouldn't happen)
-              Just endpointId =>
+            case splitLast rest of
+              Nothing => Nothing  -- Only start node, no endpoint
+              Just (middle, endpointId) =>
                 case lookup endpointId (nodeMap g) of
-                  Just endpointNode => Just (endpointNode, rest)  -- rest already excludes start
+                  Just endpointNode => 
+                    -- Return: endpoint node, and path [start, middle...]
+                    Just (endpointNode, start :: middle)
                   Nothing => Nothing
-          [] => Nothing  -- Empty path
   
   searchEnd g sp a | Fixed = pure (a, [])
   searchEnd g sp a | Borders = pure (a, [])
