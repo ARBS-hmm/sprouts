@@ -138,12 +138,91 @@ getOrderedIndices nodes a b =
           in Just ((start, end), aIsStart)
     _ => Nothing
 
---Pending
--- supply nearest bounded node to the node
+connection : Node -> Connection
+connection (MkNode id shape conn rot spaces) = conn
+
+getNodeSpaces : Node -> List Space
+getNodeSpaces (MkNode _ _ Float rot [space]) = [space]
+getNodeSpaces (MkNode _ _ Borders rot [s1, s2]) = [s1, s2]
+getNodeSpaces (MkNode _ _ Fixed rot [s1, s2, s3]) = [s1, s2, s3]
+
+getNodesInSpace : Space -> List NodeId
+getNodesInSpace S0 = []
+getNodesInSpace (Sn ids) = ids
+
 export
-searchEnd : Graph -> (sp : Space) -> Node -> Maybe (Node,List NodeId)
-searchEnd g S0 a = ?searche_0
-searchEnd g (Sn xs) a = ?searche_1
+dfs : Graph -> Node -> (visited : List NodeId) -> Maybe (List NodeId)
+dfs g a visited with (connection a)
+  dfs g a visited | Float = 
+    let currentId = nodeId a
+    in searchFromNode currentId visited
+    
+  where
+    getRotationNeighbors : Node -> List NodeId
+    getRotationNeighbors (MkNode _ Free _ () _) = []
+    getRotationNeighbors (MkNode _ Leaf _ [x] _) = [x]
+    getRotationNeighbors (MkNode _ Edge _ [x,y] _) = [x, y]
+    getRotationNeighbors (MkNode _ Sat _ [x,y,z] _) = [x, y, z]
+    mutual
+      searchFromNode : NodeId -> List NodeId -> Maybe (List NodeId)
+      searchFromNode currentId visitedIds =
+        if elem currentId visitedIds then
+          Nothing  -- Already visited
+        else
+          case lookup currentId (nodeMap g) of
+            Nothing => Nothing  -- Node doesn't exist
+            Just node =>
+              case connection node of
+                -- Found a target node
+                Fixed => Just [currentId]
+                Borders => Just [currentId]
+                -- Float node, search neighbors
+                Float => 
+                  let newVisited = currentId :: visitedIds
+                      neighbors = getRotationNeighbors node
+                  in findPath neighbors newVisited currentId
+      
+      findPath : List NodeId -> List NodeId -> NodeId -> Maybe (List NodeId)
+      findPath [] _ _ = Nothing
+      findPath (neighborId :: rest) visited currentId =
+        if elem neighborId visited then
+          findPath rest visited currentId  -- Skip visited
+        else
+          case searchFromNode neighborId visited of
+            Just path => Just (currentId :: path)  -- Success
+            Nothing => findPath rest visited currentId
+    
+  
+  dfs g a visited | Borders = Nothing
+  dfs g a visited | Fixed = Nothing
+
+-- Helper to get last element of a list
+getLast : List a -> Maybe a
+getLast [] = Nothing
+getLast [x] = Just x
+getLast (x :: xs) = getLast xs
+
+export
+searchEnd : Graph -> (sp : Space) -> Node -> Maybe (Node, List NodeId)
+searchEnd g sp a with (connection a)
+  searchEnd g sp a | Float = 
+    case dfs g a [] of
+      Nothing => Nothing
+      Just path =>
+        case path of
+          -- Need at least 2 elements: start node + at least one other
+          (start :: rest) => 
+            case getLast rest of
+              Nothing => Nothing  -- rest is empty (shouldn't happen)
+              Just endpointId =>
+                case lookup endpointId (nodeMap g) of
+                  Just endpointNode => Just (endpointNode, rest)  -- rest already excludes start
+                  Nothing => Nothing
+          [] => Nothing  -- Empty path
+  
+  searchEnd g sp a | Fixed = pure (a, [])
+  searchEnd g sp a | Borders = pure (a, [])
+
 
 export
 slice : Graph -> Space -> (a, b : Node) -> (aseq,bseq : List NodeId)-> Maybe (Vect 2 Space)
@@ -171,6 +250,7 @@ slice g (Sn nodes) a b aseq bseq =
     Nothing => Nothing
 
 checkForm : Graph -> (asp: Space) -> (a,b:Node) -> Maybe (Vect 2 Space)
+checkForm g S0 a b = Nothing
 checkForm g asp a b = do
   (aend,aseq) <- searchEnd g asp a
   (bend,bseq) <- searchEnd g asp b
