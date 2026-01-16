@@ -3,6 +3,7 @@ module Main
 import Data.Fin
 import Data.Vect
 import Data.SortedMap
+import Data.SortedSet
 import Data.List
 
 public export
@@ -44,6 +45,13 @@ mutual
 public export
 nodeId : Node -> NodeId
 nodeId (MkNode id shape conn rot spaces) = id
+
+Eq Shape where
+  (==) Free Free = True
+  (==) Leaf Leaf  =True
+  (==) Edge Edge = True
+  (==) Sat Sat = True
+  (==) _ _ = False
 
 Eq Node where
   (==) (MkNode id _ _ _ _) (MkNode id2 _ _ _ _)= (id == id2) 
@@ -193,26 +201,58 @@ public export
 getNeighbors : (n:Node) -> List NodeId
 getNeighbors n = rotToList (shape n) (rotation n)
 
-public export
-dfs : Graph -> Node -> List NodeId -> List Node
-dfs g n visited = 
-  let currentId = nodeId n
-  in if currentId `elem` visited
-     then []
-     else 
-       let newVisited = currentId :: visited
-       -- Current node + DFS on all neighbors
-       in n :: concatMap (\neighborId => 
-            case lookup neighborId (nodeMap g) of
-              Nothing => []
-              Just neighbor => dfs g neighbor newVisited
-          ) (getNeighbors n)
+export
+NodeMap : Type
+NodeMap = SortedMap NodeId Node
+
+export
+dfsFindNode : Ord NodeId => 
+               NodeMap ->           -- Map of all nodes
+               NodeId ->            -- Start node ID
+               (Node -> Bool) ->    -- Predicate on nodes (not just IDs)
+               Maybe (List NodeId)  -- Path from start to found node
+dfsFindNode nodes startId predicate =
+  case lookup startId nodes of
+    Nothing => Nothing  -- Start node doesn't exist
+    Just startNode => 
+      if predicate startNode
+        then Just [startId]  -- Start node itself satisfies predicate
+        else dfs' [(startId, [startId])] empty
+  where
+    -- Inner recursive function
+    dfs' : List (NodeId, List NodeId) ->  -- (current ID, reversed path)
+           SortedSet NodeId ->            -- Visited node IDs
+           Maybe (List NodeId)
+    
+    dfs' [] _ = Nothing  -- Stack empty, no path found
+    
+    dfs' ((currentId, path) :: rest) visited =
+      if contains currentId visited
+        then dfs' rest visited  -- Already visited, skip
+        else case lookup currentId nodes of
+          Nothing => 
+            -- Node doesn't exist (shouldn't happen if graph is consistent)
+            dfs' rest (insert currentId visited)
+          
+          Just currentNode =>
+            -- Check if this node satisfies the predicate
+            if predicate currentNode
+              then Just (reverse path)  -- Found it!
+              else 
+                -- Get neighbors from the node itself
+                let neighbors = getNeighbors currentNode
+                    newVisited = insert currentId visited
+                    newStates = map (\neighborId => 
+                                       (neighborId, neighborId :: path)) 
+                                    neighbors
+                    newStack = newStates ++ rest
+                 in dfs' newStack newVisited
 
 public export
 searchEnd : Graph -> (sp : Space) -> Node -> Maybe (Node, List NodeId)
 searchEnd g sp a with (connection a, shape a)
   searchEnd g sp a | (Float, Free) = Nothing
-  searchEnd g sp a | (Float, _) = ?dfsi
+  searchEnd g sp a | (Float, _) = ?h
   searchEnd g sp a | (Borders,_) = pure (a,[])
   searchEnd g sp a | (Fixed,_) = pure (a,[])
 

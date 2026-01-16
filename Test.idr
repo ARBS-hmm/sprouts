@@ -2,6 +2,7 @@ module Test
 import Main
 import Data.SortedMap
 import Data.Vect
+import Debug.Trace
 
 space1 : Space
 space1 = Sn [1,2,3,4,5,6]
@@ -37,3 +38,4 @@ testGraph = MkGraph nodeMap spaceMap where
 
 testEnd : Maybe (Node, List NodeId)
 testEnd = searchEnd testGraph space1 node8
+
